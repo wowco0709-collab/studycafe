@@ -662,25 +662,29 @@ function pickSeat(id) {
 function clearSel() { selSeat=null; pendCard=null; pendMove=null; renderSeats(); closeOverlay(); }
 
 // ── 카드 리더 ──
-let cBuf='', cTime=0, cTimer=null;
+let cBuf='', cTimer=null;
 document.addEventListener('keydown', e=>{
   const tag=document.activeElement?.tagName;
   if(tag==='INPUT'||tag==='TEXTAREA') return;
-  const now=Date.now();
+  clearTimeout(cTimer);
   if(e.key==='Enter'){
-    if(cBuf.length>=4){const id=cBuf.trim();cBuf='';clearTimeout(cTimer);handleCard(id);}
-    else cBuf='';
-    return;
+    if(cBuf.length>=4) handleCard(cBuf.trim());
+    cBuf=''; return;
   }
-  if(e.key.length!==1) return;
-  const dt=now-cTime; cTime=now;
-  if(dt<80||cBuf.length===0) cBuf+=e.key; else cBuf=e.key;
-  clearTimeout(cTimer); cTimer=setTimeout(()=>{cBuf='';},500);
+  if(/^\d$/.test(e.key)) cBuf+=e.key;
+  cTimer=setTimeout(()=>{cBuf='';},500);
 });
 
 async function handleCard(cardId) {
   if(!sb) return;
-  const {data:stu,error}=await sb.from('sc_students').select('*').eq('card_id',cardId).maybeSingle();
+  const stripped=cardId.replace(/^0+/,'')||cardId;
+  const candidates=[...new Set([cardId,stripped,stripped.padStart(8,'0'),stripped.padStart(7,'0')])];
+  let stu=null,error=null;
+  for(const cid of candidates){
+    const r=await sb.from('sc_students').select('*').eq('card_id',cid).maybeSingle();
+    if(r.error){error=r.error;break;}
+    if(r.data){stu=r.data;break;}
+  }
   if(error){toast('오류가 발생했습니다.','e');return;}
   if(!stu){
     if(!selSeat){toast('먼저 좌석을 선택해주세요.','w');return;}
@@ -1097,25 +1101,6 @@ const DEFAULT_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs
   pollBridge(); // COM3 카드리더 브리지 폴링 시작
 })();
 
-// ── 키보드 웨지 카드리더 (카드리더가 키보드처럼 숫자 입력) ──
-(function(){
-  let buf = '', last = 0, timer = null;
-  document.addEventListener('keydown', function(e) {
-    const now = Date.now();
-    if (now - last > 50) buf = ''; // 50ms 이상 간격이면 수동 타이핑으로 간주, 리셋
-    last = now;
-    if (timer) clearTimeout(timer);
-    if (e.key === 'Enter') {
-      if (buf.length >= 4) handleCard(buf);
-      buf = ''; return;
-    }
-    if (/^\d$/.test(e.key)) buf += e.key;
-    timer = setTimeout(function() {
-      if (buf.length >= 4) handleCard(buf);
-      buf = '';
-    }, 80);
-  });
-})();
 </script>
 </body>
 </html>
